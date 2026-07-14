@@ -274,11 +274,11 @@ void ParserEngine::parse(const char* pBuffer, std::size_t size)
 	while (processed < size)
 	{
 		const int bufferSize = static_cast<int>(std::min(static_cast<std::size_t>(PARSE_BUFFER_SIZE), size - processed));
-		if (!XML_Parse(_parser, pBuffer + processed, bufferSize, 0))
+		if (!XML_Parse(_parser, pBuffer + processed, bufferSize, 0) || _exception)
 			checkError(_parser);
 		processed += bufferSize;
 	}
-	if (!XML_Parse(_parser, pBuffer+processed, 0, 1))
+	if (!XML_Parse(_parser, pBuffer+processed, 0, 1) || _exception)
 		checkError(_parser);
 	if (_pContentHandler) _pContentHandler->endDocument();
 	popContext();
@@ -290,14 +290,14 @@ void ParserEngine::parseByteInputStream(XMLByteInputStream& istr)
 	std::streamsize n = readBytes(istr, _pBuffer, PARSE_BUFFER_SIZE);
 	while (n > 0)
 	{
-		if (!XML_Parse(_parser, _pBuffer, static_cast<int>(n), 0))
+		if (!XML_Parse(_parser, _pBuffer, static_cast<int>(n), 0) || _exception)
 			checkError(_parser);
 		if (istr.good())
 			n = readBytes(istr, _pBuffer, PARSE_BUFFER_SIZE);
 		else
 			n = 0;
 	}
-	if (!XML_Parse(_parser, _pBuffer, 0, 1))
+	if (!XML_Parse(_parser, _pBuffer, 0, 1) || _exception)
 		checkError(_parser);
 }
 
@@ -307,14 +307,14 @@ void ParserEngine::parseCharInputStream(XMLCharInputStream& istr)
 	std::streamsize n = readChars(istr, reinterpret_cast<XMLChar*>(_pBuffer), PARSE_BUFFER_SIZE/sizeof(XMLChar));
 	while (n > 0)
 	{
-		if (!XML_Parse(_parser, _pBuffer, static_cast<int>(n*sizeof(XMLChar)), 0))
+		if (!XML_Parse(_parser, _pBuffer, static_cast<int>(n*sizeof(XMLChar)), 0) || _exception)
 			checkError(_parser);
 		if (istr.good())
 			n = readChars(istr, reinterpret_cast<XMLChar*>(_pBuffer), PARSE_BUFFER_SIZE/sizeof(XMLChar));
 		else
 			n = 0;
 	}
-	if (!XML_Parse(_parser, _pBuffer, 0, 1))
+	if (!XML_Parse(_parser, _pBuffer, 0, 1) || _exception)
 		checkError(_parser);
 }
 
@@ -339,14 +339,14 @@ void ParserEngine::parseExternalByteInputStream(XML_Parser extParser, XMLByteInp
 		std::streamsize n = readBytes(istr, pBuffer, PARSE_BUFFER_SIZE);
 		while (n > 0)
 		{
-			if (!XML_Parse(extParser, pBuffer, static_cast<int>(n), 0))
+			if (!XML_Parse(extParser, pBuffer, static_cast<int>(n), 0) || _exception)
 				checkError(extParser);
 			if (istr.good())
 				n = readBytes(istr, pBuffer, PARSE_BUFFER_SIZE);
 			else
 				n = 0;
 		}
-		if (!XML_Parse(extParser, pBuffer, 0, 1))
+		if (!XML_Parse(extParser, pBuffer, 0, 1) || _exception)
 			checkError(extParser);
 	}
 	catch (...)
@@ -366,14 +366,14 @@ void ParserEngine::parseExternalCharInputStream(XML_Parser extParser, XMLCharInp
 		std::streamsize n = readChars(istr, pBuffer, PARSE_BUFFER_SIZE/sizeof(XMLChar));
 		while (n > 0)
 		{
-			if (!XML_Parse(extParser, reinterpret_cast<char*>(pBuffer), static_cast<int>(n*sizeof(XMLChar)), 0))
+			if (!XML_Parse(extParser, reinterpret_cast<char*>(pBuffer), static_cast<int>(n*sizeof(XMLChar)), 0) || _exception)
 				checkError(extParser);
 			if (istr.good())
 				n = readChars(istr, pBuffer, static_cast<int>(PARSE_BUFFER_SIZE/sizeof(XMLChar)));
 			else
 				n = 0;
 		}
-		if (!XML_Parse(extParser, reinterpret_cast<char*>(pBuffer), 0, 1))
+		if (!XML_Parse(extParser, reinterpret_cast<char*>(pBuffer), 0, 1) || _exception)
 			checkError(extParser);
 	}
 	catch (...)
@@ -894,27 +894,35 @@ int ParserEngine::handleUnknownEncoding(void* encodingHandlerData, const XML_Cha
 {
 	ParserEngine* pThis = reinterpret_cast<ParserEngine*>(encodingHandlerData);
 
-	XMLString encoding(name);
-	TextEncoding* knownEncoding = nullptr;
-
-	EncodingMap::const_iterator it = pThis->_encodings.find(encoding);
-	if (it != pThis->_encodings.end())
-		knownEncoding = it->second;
-	else
-		knownEncoding = Poco::TextEncoding::find(fromXMLString(encoding));
-
-	if (knownEncoding)
+	try
 	{
-		const TextEncoding::CharacterMap& map = knownEncoding->characterMap();
-		for (int i = 0; i < 256; ++i)
-			info->map[i] = map[i];
+		XMLString encoding(name);
+		TextEncoding* knownEncoding = nullptr;
 
-		info->data    = knownEncoding;
-		info->convert = &ParserEngine::convert;
-		info->release = nullptr;
-		return XML_STATUS_OK;
+		EncodingMap::const_iterator it = pThis->_encodings.find(encoding);
+		if (it != pThis->_encodings.end())
+			knownEncoding = it->second;
+		else
+			knownEncoding = Poco::TextEncoding::find(fromXMLString(encoding));
+
+		if (knownEncoding)
+		{
+			const TextEncoding::CharacterMap& map = knownEncoding->characterMap();
+			for (int i = 0; i < 256; ++i)
+				info->map[i] = map[i];
+
+			info->data    = knownEncoding;
+			info->convert = &ParserEngine::convert;
+			info->release = nullptr;
+			return XML_STATUS_OK;
+		}
+		else return XML_STATUS_ERROR;
 	}
-	else return XML_STATUS_ERROR;
+	catch (...)
+	{
+		pThis->abortParse(pThis->currentParser(), std::current_exception());
+		return XML_STATUS_ERROR;
+	}
 }
 
 
