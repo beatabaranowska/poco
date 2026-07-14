@@ -14,8 +14,7 @@
 #include "Poco/SAX/SAXParser.h"
 #include "Poco/SAX/InputSource.h"
 #include "Poco/SAX/EntityResolver.h"
-#include "Poco/SAX/ContentHandler.h"
-#include "Poco/SAX/Attributes.h"
+#include "Poco/SAX/DefaultHandler.h"
 #include "Poco/SAX/SAXException.h"
 #include "Poco/SAX/WhitespaceFilter.h"
 #include "Poco/XML/XMLWriter.h"
@@ -31,13 +30,11 @@ using Poco::XML::XMLReader;
 using Poco::XML::InputSource;
 using Poco::XML::EntityResolver;
 using Poco::XML::XMLString;
-using Poco::XML::XMLChar;
 using Poco::XML::XMLException;
 using Poco::XML::SAXParseException;
 using Poco::XML::WhitespaceFilter;
-using Poco::XML::ContentHandler;
+using Poco::XML::DefaultHandler;
 using Poco::XML::Attributes;
-using Poco::XML::Locator;
 
 
 class TestEntityResolver: public EntityResolver
@@ -70,7 +67,7 @@ public:
 };
 
 
-class ThrowingHandler: public ContentHandler
+class ThrowingHandler: public DefaultHandler
 {
 public:
 	enum Kind
@@ -83,52 +80,12 @@ public:
 	{
 	}
 
-	void setDocumentLocator(const Locator* loc)
-	{
-	}
-
-	void startDocument()
-	{
-	}
-
-	void endDocument()
-	{
-	}
-
 	void startElement(const XMLString& uri, const XMLString& localName, const XMLString& qname, const Attributes& attrList)
 	{
 		if (_kind == THROW_STD)
 			throw std::runtime_error("handler failure");
 		else
 			throw XMLException("handler failure");
-	}
-
-	void endElement(const XMLString& uri, const XMLString& localName, const XMLString& qname)
-	{
-	}
-
-	void characters(const XMLChar ch[], int start, int length)
-	{
-	}
-
-	void ignorableWhitespace(const XMLChar ch[], int start, int length)
-	{
-	}
-
-	void processingInstruction(const XMLString& target, const XMLString& data)
-	{
-	}
-
-	void startPrefixMapping(const XMLString& prefix, const XMLString& uri)
-	{
-	}
-
-	void endPrefixMapping(const XMLString& prefix)
-	{
-	}
-
-	void skippedEntity(const XMLString& name)
-	{
 	}
 
 private:
